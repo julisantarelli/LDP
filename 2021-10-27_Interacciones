@@ -11,7 +11,8 @@ with
 			left join public.users u on uc."userId" = u.id
 	),
 	conv_filter as (
-			select "concatIds","userId","userId2" as "targetUserId","role","role2" as "targetRole",1 as "conversation"
+			select 
+				"concatIds","userId","userId2" as "targetUserId","role","role2" as "targetRole",1 as "metric_value",'conversation' as "metric_name"
 			from conv
 			where "concatRoles" in ('PLAYERCLUB','CLUBPLAYER','PLAYERAGENTE','AGENTEPLAYER')
 	),
@@ -27,7 +28,8 @@ with
 			left join public.users u2 on "targetUserId" = u2.id
 	),
 	shares_filter as (
-			select "concatIds","userId","targetUserId","role","targetRole",1 as "share"
+			select 
+				"concatIds","userId","targetUserId","role","targetRole",1 as "metric_value",'share' as "metric_name"
 			from shares
 			where "concatRoles" in ('CLUBPLAYER','AGENTPLAYER')
 	),
@@ -43,7 +45,8 @@ with
 			left join public.users u2 on "targetUserId" = u2.id
 	),
 	followers_filter as (
-			select "concatIds","userId","targetUserId","role","targetRole",1 as "follow"
+			select 
+				"concatIds","userId","targetUserId","role","targetRole",1 as "metric_value",'follow' as "metric_name"
 			from followers
 			where "concatRoles" in ('CLUBPLAYER','AGENTPLAYER')
 	),
@@ -59,7 +62,8 @@ with
 			left join public.users u2 on "targetUserId" = u2.id
 	),
 	favourites_filter as(
-			select "concatIds","userId","targetUserId","role","targetRole",1 as  "favourites"
+			select 
+				"concatIds","userId","targetUserId","role","targetRole",1 as "metric_value",'favourites' as "metric_name"
 			from favourites
 			where "concatRoles" in ('CLUBPLAYER','AGENTPLAYER')
 	),
@@ -75,7 +79,8 @@ with
 			left join public.users u2 on "targetUserId" = u2.id
 	),
 	likes_filter as (
-			select "concatIds","userId","targetUserId","role","targetRole",1 as   "likes"
+			select 
+				"concatIds","userId","targetUserId","role","targetRole",1 as "metric_value",'likes' as "metric_name"
 			from likes
 			where "concatRoles" in ('CLUBPLAYER','AGENTPLAYER') 
 	),
@@ -91,83 +96,53 @@ with
 			left join public.users u2 on "targetUserId" = u2.id
 	),
 	visits_filter as (
-			select "concatIds","userId","targetUserId","role","targetRole",1 as  "visits"
+			select 
+				"concatIds","userId","targetUserId","role","targetRole",1 as "metric_value",'visits' as "metric_name"
 			from visits
 			where "concatRoles" in ('CLUBPLAYER','AGENTPLAYER') 
 	),
 	union_tables as(
-			select 
-				"concatIds" ,"userId" , "targetUserId" ,"role" ,"targetRole" ,
-				"conversation",
-				 0 as "share",
-				 0 as "follow",
-				 0 as "favourites",
-				 0 as "likes",
-				 0 as "visits"
-			from conv_filter 
-		union all
-			select 
-				"concatIds" ,"userId" , "targetUserId" ,"role" ,"targetRole" ,
-				0 as "conversation",
-				"share",
-				0 as "follow",
-				0 as "favourites",
-				0 as "likes",
-				0 as "visits"
-			from shares_filter 
-		union all
-			select 
-				"concatIds" ,"userId" , "targetUserId" ,"role" ,"targetRole" ,
-				0 as "conversation",
-				0 as "share",
-				"follow",
-				0 as "favourites",
-				0 as "likes",
-				0 as "visits"
-			from followers_filter 
-		union all
-			select 
-				"concatIds" ,"userId" , "targetUserId" ,"role" ,"targetRole" ,
-				0 as "conversation",
-				0 as "share",
-				0 as "follow",
-				"favourites",
-				0 as "likes",
-				0 as "visits"
-			from favourites_filter 
-		union all
-			select 
-				"concatIds" ,"userId" , "targetUserId" ,"role" ,"targetRole" ,
-				0 as "conversation",
-				0 as "share",
-				0 as "follow",
-				0 as "favourites",
-				"likes",
-				0 as "visits"
-			from likes_filter
-		union all
-			select 
-				"concatIds" ,"userId" , "targetUserId" ,"role" ,"targetRole" ,
-				0 as "conversation",
-				0 as "share",
-				0 as "follow",
-				0 as "favourites",
-				0 as "likes",
-				"visits"
-			from visits_filter)
+			select * from conv_filter 
+			union all
+			select * from shares_filter 
+			union all
+			select * from followers_filter 
+			union all
+			select * from favourites_filter 
+			union all
+			select * from likes_filter
+			union all
+			select * from visits_filter)
+		
 			
+
 select 
-	"concatIds" ,"userId" , "targetUserId" ,"role" ,"targetRole" ,
-	sum("conversation") as "conversation",
-	sum("share") as "share",
-	sum("follow") "as follow",
-	sum("favourites") as "favourites",
-	sum("likes") as "likes",
-	sum("visits") as "visits" 
-from union_tables
-group by 1,2,3,4,5
+	"concatIds","userId","targetUserId","role","targetRole",
+	SUM(CASE WHEN "metric_name" = 'conversation' THEN "metric_value" ELSE 0 END) AS "conversation",
+	SUM(CASE WHEN "metric_name" = 'share' THEN "metric_value" ELSE 0 END) AS "share",
+	SUM(CASE WHEN "metric_name" = 'follow' THEN "metric_value" ELSE 0 END) AS "follow",
+	SUM(CASE WHEN "metric_name" = 'favourites' THEN "metric_value" ELSE 0 END) AS "favourites",
+	SUM(CASE WHEN "metric_name" = 'likes' THEN "metric_value" ELSE 0 END) AS "likes",
+	SUM(CASE WHEN "metric_name" = 'visits' THEN "metric_value" ELSE 0 END) AS "visits"
+FROM union_tables GROUP BY 1,2,3,4,5
+
+
+
     
     
+
+
+
+
+
+	
+
+
+
+
+	
+
+
 
 
 
