@@ -1,0 +1,9 @@
+SELECT 
+	id, firstname, lastname, "role",  "position", country, "countryAlt", "residenceCity", "residenceCountry", 
+	birthdate, status,  "europeanPassport", "playerType", "tutorFirstname", "tutorLastname",
+	"companyName", "companyType", validated, "inTransfer", "agentId", "clubId"
+FROM public.users
+where 
+	("role" = 'PLAYER')  and
+	((report is null) or (report = '' ))and
+	("deletedAt" is null) 
