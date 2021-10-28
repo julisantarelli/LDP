@@ -1,0 +1,8 @@
+SELECT 
+	id, firstname, lastname,  "role", "position", country, "countryAlt", "residenceCity", "residenceCountry", 
+	 "clubCategory",  "clubLeague",  "companyName", "companyType", validated,  "isFIFA", "isClub"
+FROM public.users
+where 
+	(("role" = 'AGENT') or ("role" = 'CLUB')) and
+	((report is null) or (report = '' )) and
+	("deletedAt" is null) ;
