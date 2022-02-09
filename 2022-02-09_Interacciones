@@ -1,0 +1,128 @@
+with 
+	conv as (
+	-- el objetivo es tener un conteo de las conversaciones que se generaron entre distintos users y tener el rol de cada uno para dsp filtrar las q nos importan
+			select 
+				uc."createdAt",
+				uc."userId", 
+				lead(uc."userId",1) over(partition by uc."conversationId") as "targetUserId",				https://github.com/julisantarelli/LDP
+				concat(uc."userId",'-',lead(uc."userId",1) over(partition by uc."conversationId")) as "concatIds",
+				u."role", 
+				lead(u."role",1) over(partition by uc."conversationId") as "targetRole",
+				concat(u."role",lead(u."role",1) over(partition by uc."conversationId")) as "concatRoles",
+				'conversation' as "metric_name",
+				1 as "metric_value"
+			from public.users_conversations uc 
+			left join public.users u on uc."userId" = u.id
+			),		
+	shares as (
+	-- el objetivo es tener un conteo de las veces que un usuario comparte un perfil a otro usuario y los roles de cada uno
+			select 
+				i."createdAt",
+				i."userId", 
+				i."targetUserId",
+				concat(i."userId",'-',i."targetUserId") as "concatIds",
+				u."role" as "role", 
+				u2."role" as "targetRole",
+				concat(u."role",u2."role") as "concatRoles",
+				'share' as "metric_name",
+				1 as "metric_value"
+			from public.users_shares i 
+			left join public.users u on i."userId" = u.id
+			left join public.users u2 on i."targetUserId" = u2.id
+			),
+	followers as (
+	-- el objetivo es tener un conteo de las veces que un usuario sigue a otro usuario y los roles de cada uno
+			select 
+				i."createdAt",
+				i."userId", 
+				i."targetUserId",
+				concat(i."userId",'-',i."targetUserId") as "concatIds", 
+				u."role" as "role", 
+				u2."role" as "targetRole",
+				concat(u."role",u2."role") as "concatRoles",
+				'follow' as "metric_name",
+				1 as "metric_value"
+			from public.users_followers i 
+			left join public.users u on i."userId" = u.id
+			left join public.users u2 on i."targetUserId" = u2.id
+			),
+	favourites as (
+	-- el objetivo es tener un conteo de las veces que un usuario guarda como fav a otro y los roles de cada uno
+			select 
+				i."createdAt",
+				i."userId", 
+				i."targetUserId",
+				concat(i."userId",'-',i."targetUserId") as "concatIds",
+				u."role" as "role", 
+				u2."role" as "targetRole",
+				concat(u."role",u2."role") as "concatRoles" ,
+				'favourites' as "metric_name",
+				1 as "metric_value"
+			from public.users_favorites i 
+			left join public.users u on i."userId" = u.id
+			left join public.users u2 on i."targetUserId" = u2.id
+			),
+	likes as (
+	-- el objetivo es tener un conteo de las veces que un usuario likea a otro y los roles de cada uno
+			select 
+				i."createdAt",
+				i."userId", 
+				i."targetUserId",
+				concat(i."userId",'-',i."targetUserId") as "concatIds",
+				u."role" as "role", 
+				u2."role" as "targetRole",
+				concat(u."role",u2."role") as "concatRoles" ,
+				'likes' as "metric_name",
+				1 as "metric_value"
+			from public.users_likes i 
+			left join public.users u on i."userId" = u.id
+			left join public.users u2 on i."targetUserId" = u2.id
+			),
+	visits  as (
+	-- el objetivo es tener un conteo de las veces que un usuario sigue a otro y los roles de cada uno
+			select 
+				i."createdAt",
+				i."userId", 
+				i."targetUserId",
+				concat(i."userId",'-',i."targetUserId") as "concatIds",
+				u."role" as "role", 
+				u2."role" as "targetRole",
+				concat(u."role",u2."role") as "concatRoles" ,
+				'visits' as "metric_name",
+				1 as "metric_value"
+			from public.users_visits i 
+			left join public.users u on i."userId" = u.id
+			left join public.users u2 on i."targetUserId" = u2.id
+			),	
+	union_tables as (
+	--unimos todas las tablas del conteo de cada interaccion una debajo de la otra
+			select * from conv 
+			union all
+			select * from shares 
+			union all
+			select * from followers 
+			union all
+			select * from favourites  
+			union all
+			select * from likes
+			union all
+			select * from visits 
+			)
+-- por ultimo re-estructuramo la tabla, teniendo una columna para cada interaccion que muestre el total 
+-- de interacciones generadas por relacion user-user
+select
+	"concatIds","userId","targetUserId","role","targetRole",
+	SUM(CASE WHEN "metric_name" = 'conversation' THEN "metric_value" ELSE 0 END) AS "conversation",
+	SUM(CASE WHEN "metric_name" = 'share' THEN "metric_value" ELSE 0 END) AS "share",
+	SUM(CASE WHEN "metric_name" = 'follow' THEN "metric_value" ELSE 0 END) AS "follow",
+	SUM(CASE WHEN "metric_name" = 'favourites' THEN "metric_value" ELSE 0 END) AS "favourites",
+	SUM(CASE WHEN "metric_name" = 'likes' THEN "metric_value" ELSE 0 END) AS "likes",
+	SUM(CASE WHEN "metric_name" = 'visits' THEN "metric_value" ELSE 0 END) AS "visits"
+FROM union_tables 
+GROUP BY 1,2,3,4,5
+
+    
+    
+
+
+
