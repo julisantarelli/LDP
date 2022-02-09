@@ -4,11 +4,8 @@ with
 			select 
 				uc."createdAt",
 				uc."userId", 
-				lead(uc."userId",1) over(partition by uc."conversationId") as "targetUserId",				https://github.com/julisantarelli/LDP
+				lead(uc."userId",1) over(partition by uc."conversationId") as "targetUserId",				
 				concat(uc."userId",'-',lead(uc."userId",1) over(partition by uc."conversationId")) as "concatIds",
-				u."role", 
-				lead(u."role",1) over(partition by uc."conversationId") as "targetRole",
-				concat(u."role",lead(u."role",1) over(partition by uc."conversationId")) as "concatRoles",
 				'conversation' as "metric_name",
 				1 as "metric_value"
 			from public.users_conversations uc 
@@ -21,9 +18,6 @@ with
 				i."userId", 
 				i."targetUserId",
 				concat(i."userId",'-',i."targetUserId") as "concatIds",
-				u."role" as "role", 
-				u2."role" as "targetRole",
-				concat(u."role",u2."role") as "concatRoles",
 				'share' as "metric_name",
 				1 as "metric_value"
 			from public.users_shares i 
@@ -37,9 +31,6 @@ with
 				i."userId", 
 				i."targetUserId",
 				concat(i."userId",'-',i."targetUserId") as "concatIds", 
-				u."role" as "role", 
-				u2."role" as "targetRole",
-				concat(u."role",u2."role") as "concatRoles",
 				'follow' as "metric_name",
 				1 as "metric_value"
 			from public.users_followers i 
@@ -53,9 +44,6 @@ with
 				i."userId", 
 				i."targetUserId",
 				concat(i."userId",'-',i."targetUserId") as "concatIds",
-				u."role" as "role", 
-				u2."role" as "targetRole",
-				concat(u."role",u2."role") as "concatRoles" ,
 				'favourites' as "metric_name",
 				1 as "metric_value"
 			from public.users_favorites i 
@@ -69,9 +57,6 @@ with
 				i."userId", 
 				i."targetUserId",
 				concat(i."userId",'-',i."targetUserId") as "concatIds",
-				u."role" as "role", 
-				u2."role" as "targetRole",
-				concat(u."role",u2."role") as "concatRoles" ,
 				'likes' as "metric_name",
 				1 as "metric_value"
 			from public.users_likes i 
@@ -85,9 +70,6 @@ with
 				i."userId", 
 				i."targetUserId",
 				concat(i."userId",'-',i."targetUserId") as "concatIds",
-				u."role" as "role", 
-				u2."role" as "targetRole",
-				concat(u."role",u2."role") as "concatRoles" ,
 				'visits' as "metric_name",
 				1 as "metric_value"
 			from public.users_visits i 
@@ -111,18 +93,30 @@ with
 -- por ultimo re-estructuramo la tabla, teniendo una columna para cada interaccion que muestre el total 
 -- de interacciones generadas por relacion user-user
 select
-	"concatIds","userId","targetUserId","role","targetRole",
-	SUM(CASE WHEN "metric_name" = 'conversation' THEN "metric_value" ELSE 0 END) AS "conversation",
-	SUM(CASE WHEN "metric_name" = 'share' THEN "metric_value" ELSE 0 END) AS "share",
-	SUM(CASE WHEN "metric_name" = 'follow' THEN "metric_value" ELSE 0 END) AS "follow",
-	SUM(CASE WHEN "metric_name" = 'favourites' THEN "metric_value" ELSE 0 END) AS "favourites",
-	SUM(CASE WHEN "metric_name" = 'likes' THEN "metric_value" ELSE 0 END) AS "likes",
-	SUM(CASE WHEN "metric_name" = 'visits' THEN "metric_value" ELSE 0 END) AS "visits"
-FROM union_tables 
-GROUP BY 1,2,3,4,5
+	i."concatIds",
+	i."userId", 
+	u."role" as "user_role", 
+	u.country as "user_country", 
+	u.birthdate as "user_birth",
+	u."playerType" as "user_type", 
+	u.validated as "user_validated",
+	i."targetUserId",
+	u2."role" as "target_user_role", 
+	u2.country as "target_user_country", 
+	u2.birthdate as "target_user_birth",
+	u2."playerType" as "target_user_type", 
+	u2.validated as "target_user_validated",
+	SUM(CASE WHEN i."metric_name" = 'conversation' THEN i."metric_value" ELSE 0 END) AS "conversation",
+	SUM(CASE WHEN i."metric_name" = 'share' THEN i."metric_value" ELSE 0 END) AS "share",
+	SUM(CASE WHEN i."metric_name" = 'follow' THEN i."metric_value" ELSE 0 END) AS "follow",
+	SUM(CASE WHEN i."metric_name" = 'favourites' THEN i."metric_value" ELSE 0 END) AS "favourites",
+	SUM(CASE WHEN i."metric_name" = 'likes' THEN i."metric_value" ELSE 0 END) AS "likes",
+	SUM(CASE WHEN i."metric_name" = 'visits' THEN i."metric_value" ELSE 0 END) AS "visits"
+FROM union_tables i
+left join public.users u on i."userId" = u.id
+left join public.users u2 on i."targetUserId" = u2.id
+GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13
 
     
-    
-
 
 
