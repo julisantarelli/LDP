@@ -1,5 +1,5 @@
 with 
-	conv as (
+	conv_pre as (
 	-- el objetivo es tener un conteo de las conversaciones que se generaron entre distintos users y tener el rol de cada uno para dsp filtrar las q nos importan
 			select 
 				uc."createdAt",
@@ -10,7 +10,13 @@ with
 				1 as "metric_value"
 			from public.users_conversations uc 
 			left join public.users u on uc."userId" = u.id
-			),		
+			),
+	conv as (
+	-- el objetivo es tener un conteo de las conversaciones que se generaron entre distintos users y tener el rol de cada uno para dsp filtrar las q nos importan
+			select *
+			from conv_pre 
+			where "targetUserId" notnull 
+			),	
 	shares as (
 	-- el objetivo es tener un conteo de las veces que un usuario comparte un perfil a otro usuario y los roles de cada uno
 			select 
@@ -106,6 +112,7 @@ select
 	u2.birthdate as "target_user_birth",
 	u2."playerType" as "target_user_type", 
 	u2.validated as "target_user_validated",
+        concat(u."role",u2."role") as "concatRoles",
 	SUM(CASE WHEN i."metric_name" = 'conversation' THEN i."metric_value" ELSE 0 END) AS "conversation",
 	SUM(CASE WHEN i."metric_name" = 'share' THEN i."metric_value" ELSE 0 END) AS "share",
 	SUM(CASE WHEN i."metric_name" = 'follow' THEN i."metric_value" ELSE 0 END) AS "follow",
@@ -115,7 +122,7 @@ select
 FROM union_tables i
 left join public.users u on i."userId" = u.id
 left join public.users u2 on i."targetUserId" = u2.id
-GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13
+GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14
 
     
 
