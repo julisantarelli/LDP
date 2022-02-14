@@ -1,0 +1,30 @@
+with
+        conv as (
+        -- el objetivo es tener un conteo de las conversaciones que se generaron entre distintos users y tener el rol de cada uno para dsp filtrar las q nos importan
+			select 
+				uc."createdAt",
+				uc."conversationId",
+				uc."userId", 
+				lead(uc."userId",1) over(partition by uc."conversationId") as "targetUserId",				
+				concat(uc."userId",'-',lead(uc."userId",1) over(partition by uc."conversationId")) as "concatIds",
+				u."role", 
+				lead(u."role",1) over(partition by uc."conversationId") as "targetRole",
+				concat(u."role",lead(u."role",1) over(partition by uc."conversationId")) as "concatRoles",
+				'conversation' as "metric_name",
+				1 as "count_conv"
+			from public.users_conversations uc 
+			left join public.users u on uc."userId" = u.id
+      ),
+      -- conteo de mensajes por cada interaccion de usuarios en una conversacion
+        count_messages as (
+        	select 
+	        	"conversationId",
+	        	count(id)
+        	from public.messages 
+        	group by 1
+      )
+        -- unimos ambas tablas
+            select *
+            from conv c
+            left join count_messages cm on c."conversationId" = cm."conversationId" 
+            where c."targetUserId" notnull
