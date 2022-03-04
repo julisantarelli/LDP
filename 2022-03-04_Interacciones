@@ -1,0 +1,161 @@
+--interacciones de clubes hacia jugadores (solamente se incluyen los validados ya que sino los clubes no pueden acceder a la platforma)
+
+with 
+	conv as (
+			select 
+				uc."userId", 
+				lead(uc."userId",1) over(partition by uc."conversationId") as "targetUserId",				
+				concat(uc."userId",'-',lead(uc."userId",1) over(partition by uc."conversationId")) as "concatIds",
+				u."role", 
+				lead(u."role",1) over(partition by uc."conversationId") as "targetRole",
+				concat(u."role",lead(u."role",1) over(partition by uc."conversationId")) as "concatRoles",
+				'conversation' as "metric_name",
+				1 as "metric_value"
+			from public.users_conversations uc 
+			left join public.users u on uc."userId" = u.id
+	),
+	shares as (
+			select 
+				i."userId", 
+				i."targetUserId",
+				concat(i."userId",'-',i."targetUserId") as "concatIds",
+				u."role" as "role", 
+				u2."role" as "targetRole",
+				concat(u."role",u2."role") as "concatRoles",
+				'share' as "metric_name",
+				1 as "metric_value"
+			from public.users_shares i 
+			left join public.users u on i."userId" = u.id
+			left join public.users u2 on "targetUserId" = u2.id
+	),
+	followers as (
+			select 
+				i."userId", 
+				i."targetUserId",
+				concat(i."userId",'-',i."targetUserId") as "concatIds", 
+				u."role" as "role", 
+				u2."role" as "targetRole",
+				concat(u."role",u2."role") as "concatRoles",
+				'follow' as "metric_name",
+				1 as "metric_value"
+			from public.users_followers i 
+			left join public.users u on i."userId" = u.id
+			left join public.users u2 on "targetUserId" = u2.id
+	),
+	favourites as (
+			select 
+				i."userId", 
+				i."targetUserId",
+				concat(i."userId",'-',i."targetUserId") as "concatIds",
+				u."role" as "role", 
+				u2."role" as "targetRole",
+				concat(u."role",u2."role") as "concatRoles" ,
+				'favourites' as "metric_name",
+				1 as "metric_value"
+			from public.users_favorites i 
+			left join public.users u on i."userId" = u.id
+			left join public.users u2 on "targetUserId" = u2.id
+	),
+	likes as (
+			select 
+				i."userId", 
+				i."targetUserId",
+				concat(i."userId",'-',i."targetUserId") as "concatIds",
+				u."role" as "role", 
+				u2."role" as "targetRole",
+				concat(u."role",u2."role") as "concatRoles" ,
+				'likes' as "metric_name",
+				1 as "metric_value"
+			from public.users_likes i 
+			left join public.users u on i."userId" = u.id
+			left join public.users u2 on "targetUserId" = u2.id
+	),
+	visits  as (
+			select 
+				i."userId", 
+				i."targetUserId",
+				concat(i."userId",'-',i."targetUserId") as "concatIds",
+				u."role" as "role", 
+				u2."role" as "targetRole",
+				concat(u."role",u2."role") as "concatRoles" ,
+				'visits' as "metric_name",
+				1 as "metric_value"
+			from public.users_visits i 
+			left join public.users u on i."userId" = u.id
+			left join public.users u2 on "targetUserId" = u2.id
+	),
+	skills_likes as (
+			select 
+				i."userId", 
+				s."userId" as "targetUserId",
+				concat(i."userId",'-',s."userId") as "concatIds",
+				u."role" as "role", 
+				u2."role" as "targetRole",
+				concat(u."role",u2."role") as "concatRoles" ,
+				'skill_like' as "metric_name",
+				1 as "metric_value"
+			from public.skills_likes i 
+			left join public.skills s on i."skillId" = s.id
+			left join public.users u on i."userId" = u.id
+			left join public.users u2 on s."userId" = u2.id
+	),
+	skills_comments as (
+
+			select 
+				i."userId", 
+				s."userId" as "targetUserId",
+				concat(i."userId",'-',s."userId") as "concatIds",
+				u."role" as "role", 
+				u2."role" as "targetRole",
+				concat(u."role",u2."role") as "concatRoles" ,
+				'skill_comment' as "metric_name",
+				1 as "metric_value"
+			from public.skills_commentaries i 
+			left join public.skills s on i."skillId" = s.id
+			left join public.users u on i."userId" = u.id
+			left join public.users u2 on s."userId" = u2.id
+	),	
+	union_tables as (
+			select * from conv 
+			union all
+			select * from shares 
+			union all
+			select * from followers 
+			union all
+			select * from favourites  
+			union all
+			select * from likes
+			union all
+			select * from visits 
+			union all
+			select * from skills_likes  
+			union all
+			select * from skills_comments 
+			)
+select 
+	"concatIds","userId","targetUserId","role","targetRole",
+	SUM(CASE WHEN "metric_name" = 'conversation' THEN "metric_value" ELSE 0 END) AS "conversation",
+	SUM(CASE WHEN "metric_name" = 'share' THEN "metric_value" ELSE 0 END) AS "share",
+	SUM(CASE WHEN "metric_name" = 'follow' THEN "metric_value" ELSE 0 END) AS "follow",
+	SUM(CASE WHEN "metric_name" = 'favourites' THEN "metric_value" ELSE 0 END) AS "favourites",
+	SUM(CASE WHEN "metric_name" = 'likes' THEN "metric_value" ELSE 0 END) AS "likes",
+	SUM(CASE WHEN "metric_name" = 'visits' THEN "metric_value" ELSE 0 END) AS "visits",
+	SUM(CASE WHEN "metric_name" = 'skill_like' THEN "metric_value" ELSE 0 END) AS "skill_like",
+	SUM(CASE WHEN "metric_name" = 'skill_comment' THEN "metric_value" ELSE 0 END) AS "skill_comment"
+FROM union_tables 
+where "concatRoles" in ('CLUBPLAYER') 
+GROUP BY 1,2,3,4,5;
+
+
+-- distinct de clubes
+
+SELECT DISTINCT id AS "clubs_id", "role", "companyName"
+FROM public.users
+WHERE  "isClub" is true
+order by "companyName" asc 
+
+--distinct de jugadore
+
+SELECT DISTINCT id AS "players_id", "role"
+FROM public.users
+WHERE "role" = 'PLAYER'
