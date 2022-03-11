@@ -1,3 +1,6 @@
+TABLA:::::::   Users subscriptions and access
+
+
 with 
 	total_users as (
 					SELECT 
@@ -81,48 +84,100 @@ SELECT
 	left join mob_pl30 pml30 on tu.id = pml30."userId" 	
 
 
-	-----
-  
-  
-  
-  with 
+TABLA:::::::	Users Access Monthly Evolution
+ 
+with 
 	total_users as (
+					SELECT 
+						"createdAt", 
+						id, 
+						"role", 
+						"residenceCountry", 
+						1 as "userCount"
+					FROM public.users
+					where 
+						validated is true
+						and "isClub" is true
+						and (report is null or report = '') 
+						and "deletedAt" is null 
+					
+					union ALL
+						
+					SELECT 
+						"createdAt", 
+						id, 
+						"role", 
+						"residenceCountry", 
+						1 as "userCount"
+					FROM public.users
+					where 
+						validated is true
+						and ("role" = 'PLAYER' or "role" = 'AGENT')
+						and (report is null or report = '') 
+						and "deletedAt" is null),
+total_users_by_month as (
+					select 
+						to_char("createdAt", 'YYYY-MM') as "year_month",
+						"role",
+						sum("userCount") as "new_users" 
+					from total_users
+					group by 1,2
+					order by "year_month" desc),
+monthly_actions_per_users as ( 
+								select 
+									to_char(ua."createdAt", 'YYYY-MM') as "year_month",
+									ua."userId",
+									u."role",
+									count(ua."id")  as "web_actions"
+								FROM public.users_activities ua
+								left join public.users u on ua."userId" = u.id
+								where 
+									validated is true
+									and (report is null or report = '') 
+								group by 1,2,3
+								having count(ua."id") > 1),
+monthly_actions as ( 
+								select 
+									"year_month",
+									"role",
+									count("userId")  as "web_mau"
+								FROM monthly_actions_per_users
+								group by 1,2
+								order by year_month desc),
+mob_monthly_actions_per_users as ( 
+								select 
+									to_char(ud."createdAt", 'YYYY-MM') as "year_month",
+									ud."userId",
+									u."role",
+									count(ud."id")  as "mob_actions"
+								FROM public.users_devices ud
+								left join public.users u on ud."userId" = u.id
+								where 
+									validated is true
+									and (report is null or report = '') 
+								group by 1,2,3
+								having count(ud."id") > 1),
+mob_monthly_actions as ( 
+								select 
+									"year_month",
+									"role",
+									count("userId")  as "mob_mau"
+								FROM mob_monthly_actions_per_users
+								group by 1,2
+								order by year_month desc)
+select tu.*, 
+	sum(tu."new_users") over(partition by tu."role" order by tu."year_month") as "total_users",
+	"web_mau",
+	"mob_mau",
+	"web_mau" + "mob_mau" as "mau"
+from total_users_by_month tu
+left join monthly_actions using("year_month","role")
+left join mob_monthly_actions using("year_month","role")
+order by "year_month" desc
 
-SELECT *
-FROM public.users
-where 
-	validated is true
-	and "isClub" is true
-	and (report is null or report = '') 
-	and "deletedAt" is null 
 
-union ALL
-	
-SELECT *
-FROM public.users
-where 
-	validated is true
-	and ("role" = 'PLAYER' or "role" = 'AGENT')
-	and (report is null or report = '') 
-	and "deletedAt" is null )
-	
-, total_users_by_day as (
 
-select 
-	date("createdAt"),
-	"role",
-	country,
-	sum("userCount") as "totalUsers" 
-	from total_users
-	group by 1,2,3
-	order by date desc 
-	
-)
-	
-	select *, sum("totalUsers") over(partition by "role" order by date)
-	from total_users_by_day
-	order by date desc
-	
+
 
 
 ----
