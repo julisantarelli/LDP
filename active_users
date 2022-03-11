@@ -123,7 +123,7 @@ total_users_by_month as (
 					from total_users
 					group by 1,2
 					order by "year_month" desc),
-monthly_actions_per_users as ( 
+web_monthly_actions_per_users as ( 
 								select 
 									to_char(ua."createdAt", 'YYYY-MM') as "year_month",
 									ua."userId",
@@ -136,12 +136,12 @@ monthly_actions_per_users as (
 									and (report is null or report = '') 
 								group by 1,2,3
 								having count(ua."id") > 1),
-monthly_actions as ( 
+web_monthly_actions as ( 
 								select 
 									"year_month",
 									"role",
 									count("userId")  as "web_mau"
-								FROM monthly_actions_per_users
+								FROM web_monthly_actions_per_users
 								group by 1,2
 								order by year_month desc),
 mob_monthly_actions_per_users as ( 
@@ -164,17 +164,30 @@ mob_monthly_actions as (
 									count("userId")  as "mob_mau"
 								FROM mob_monthly_actions_per_users
 								group by 1,2
-								order by year_month desc)
+								order by year_month desc),
+monthly_actions_per_users as ( 
+								select * from web_monthly_actions_per_users
+								union ALL
+								select * from mob_monthly_actions_per_users),
+monthly_actions as ( 
+								select 
+									"year_month",
+									"role",
+									count (distinct "userId")  as "mau"
+								FROM monthly_actions_per_users
+								group by 1,2
+								order by year_month desc)						
+								
 select tu.*, 
 	sum(tu."new_users") over(partition by tu."role" order by tu."year_month") as "total_users",
 	"web_mau",
 	"mob_mau",
-	"web_mau" + "mob_mau" as "mau"
+	"mau"
 from total_users_by_month tu
-left join monthly_actions using("year_month","role")
+left join web_monthly_actions using("year_month","role")
 left join mob_monthly_actions using("year_month","role")
+left join monthly_actions using("year_month","role")
 order by "year_month" desc
-
 
 
 
