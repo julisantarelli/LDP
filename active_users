@@ -1,0 +1,145 @@
+with 
+	total_users as (
+					SELECT 
+						"createdAt", 
+						id, 
+						"role", 
+						"residenceCountry", 
+						1 as "userCount"
+					FROM public.users
+					where 
+						validated is true
+						and "isClub" is true
+						and (report is null or report = '') 
+						and "deletedAt" is null 
+					
+					union ALL
+						
+					SELECT 
+						"createdAt", 
+						id, 
+						"role", 
+						"residenceCountry", 
+						1 as "userCount"
+					FROM public.users
+					where 
+						validated is true
+						and ("role" = 'PLAYER' or "role" = 'AGENT')
+						and (report is null or report = '') 
+						and "deletedAt" is null),
+	web_l30 as (
+				select 
+					"userId", 
+					1 as "web_active_l30"
+				FROM public.users_activities 
+				where date > (SELECT current_date + INTERVAL '-30 day')
+				group by 1
+				having count(id) > 1),
+	web_pl30 as (
+				select 
+					"userId", 
+					1 as "web_active_pl30"
+				FROM public.users_activities 
+				where date <= (SELECT current_date + INTERVAL '-30 day')
+					and date > (SELECT current_date + INTERVAL '-60 day')
+				group by 1
+				having count(id) > 1),
+	mob_l30 as (
+				select 
+					"userId", 
+					1 as "mob_active_l30"
+				FROM public.users_devices 
+				where date("createdAt") > (SELECT current_date + INTERVAL '-30 day')
+				group by 1
+				having count(id) > 1),
+	mob_pl30 as (
+				select 
+					"userId", 
+					1 as "mob_active_pl30"
+				FROM public.users_devices 
+				where date("createdAt") <= (SELECT current_date + INTERVAL '-30 day')
+					and date("createdAt") > (SELECT current_date + INTERVAL '-60 day')
+				group by 1
+				having count(id) > 1) 
+SELECT 
+		date(tu."createdAt"), 
+		tu.id, 
+		tu."role", 
+		tu."residenceCountry", 
+		tu."userCount",
+		"web_active_l30",
+		"mob_active_l30",
+		case when "web_active_l30" = 1 or "mob_active_l30" = 1 then 1 else null end as "active_l30",
+		"web_active_pl30",
+		"mob_active_pl30",
+		case when "web_active_pl30" = 1 or "mob_active_pl30" = 1 then 1 else null end as "active_pl30"	
+	from 
+	total_users tu
+	left join web_l30 wl30 on tu.id = wl30."userId"
+	left join web_pl30 wpl30 on tu.id = wpl30."userId"
+	left join mob_l30 ml30 on tu.id = ml30."userId"
+	left join mob_pl30 pml30 on tu.id = pml30."userId" 	
+
+
+	-----
+  
+  
+  
+  with 
+	total_users as (
+
+SELECT *
+FROM public.users
+where 
+	validated is true
+	and "isClub" is true
+	and (report is null or report = '') 
+	and "deletedAt" is null 
+
+union ALL
+	
+SELECT *
+FROM public.users
+where 
+	validated is true
+	and ("role" = 'PLAYER' or "role" = 'AGENT')
+	and (report is null or report = '') 
+	and "deletedAt" is null )
+	
+, total_users_by_day as (
+
+select 
+	date("createdAt"),
+	"role",
+	country,
+	sum("userCount") as "totalUsers" 
+	from total_users
+	group by 1,2,3
+	order by date desc 
+	
+)
+	
+	select *, sum("totalUsers") over(partition by "role" order by date)
+	from total_users_by_day
+	order by date desc
+	
+
+
+----
+
+with 
+	actions_per_users as ( 
+				select ua.*, 
+				u."role",
+				count(ua."userId") OVER(PARTITION BY extract(year from ua."date"), extract(month from ua."date"),"userId") as "web_actions"
+				FROM public.users_activities ua
+				left join public.users u on ua."userId" = u.id)
+	select 
+	extract(year from "date"), 
+	extract(month from "date"), 
+	count(distinct "userId") as "web_players_maus"  
+	from actions_per_users
+	where "web_actions" > 1
+		and "role" = 'PLAYER'
+	group by 1,2
+	order by 1 desc ,2 desc 
