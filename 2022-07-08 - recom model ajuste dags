@@ -1,0 +1,288 @@
+#################################################################### AJUSTES EN EL DAG ####################################################################
+
+--------------------------- modelo de matrix factorization - ajustamos las interacciones que se suman para el feedback implicito------------------------------
+------------------------------------------------ AGREGAR NUEVAS INTARACCIONES PARA EL RATING ------------------------------------------------------------------
+DAG ANTES
+
+CREATE_MODEL_QUERY = f"""
+CREATE OR REPLACE MODEL `ldp-data-servin.cdw_recos01_stru.recomendation_model`
+OPTIONS
+
+  (model_type='matrix_factorization',
+
+   user_col='userId',
+
+   item_col='targetUserId',
+
+   rating_col='rating',
+
+   l2_reg=9.83,
+
+   EARLY_STOP=FALSE,
+
+   MAX_ITERATIONS = 12,
+
+   FEEDBACK_TYPE='IMPLICIT',
+
+   num_factors=34) AS
+
+SELECT userId, targetUserId, sum((cast(conversation as numeric) + cast(messages as numeric) + cast(share as numeric) + cast(follow as numeric) + cast(favourites as numeric) + cast(likes as numeric) + cast(visits as numeric))) AS rating  
+ FROM `ldp-data-servin.cdw_recos01_stru.rating` WHERE DATE(_PARTITIONTIME) >= "{dt_now.year}-{dt_now.month:02d}-01" group by 1, 2
+"""
+
+
+DAG A AJUSTAR
+
+CREATE_MODEL_QUERY = f"""
+CREATE OR REPLACE MODEL `ldp-data-servin.cdw_recos01_stru.recomendation_model`
+OPTIONS
+
+  (model_type='matrix_factorization',
+
+   user_col='userId',
+
+   item_col='targetUserId',
+
+   rating_col='rating',
+
+   l2_reg=9.83,
+
+   EARLY_STOP=FALSE,
+
+   MAX_ITERATIONS = 12,
+
+   FEEDBACK_TYPE='IMPLICIT',
+
+   num_factors=34) AS
+
+SELECT userId, targetUserId, 
+sum(
+  (cast(sent_message as numeric) 
+  + cast(both_send_message as numeric) 
+  + cast(long_messages as numeric) 
+  + cast(share as numeric) 
+  + cast(follow as numeric) 
+  + cast(favourites as numeric) 
+  + cast(likes as numeric) 
+  + cast(visits as numeric)
+  + cast(vinc_request as numeric)))
+    AS rating  
+ FROM `ldp-data-servin.cdw_recos01_stru.rating` WHERE DATE(_PARTITIONTIME) >= "{dt_now.year}-{dt_now.month:02d}-01" group by 1, 2
+"""
+
+
+--------------------------- tabla que se escribe en bq de las reglas que cumple cada jugador ------------------------------------------
+------------------------------------------------ AJUSTE A LAS REGLAS ------------------------------------------------------------------
+
+DAG ANTES
+
+CREATE_TABLE_RULES_ITEMS = f"""
+SELECT id, 1 rule, 'Primera' clubCategory FROM `ldp-data-servin.cdw_recos01_cons.golden_items`  WHERE player_age BETWEEN 17 AND 21 AND playerType = 'PROFESSIONAL'
+    UNION ALL
+SELECT id, 2 rule, 'Segunda' clubCategory FROM `ldp-data-servin.cdw_recos01_cons.golden_items`  WHERE player_age BETWEEN 17 AND 21 AND playerType IN ('PROFESSIONAL','SEMIPROFESSIONAL')
+    UNION ALL
+SELECT id, 3 rule, 'Tercera y Cuarta' clubCategory FROM `ldp-data-servin.cdw_recos01_cons.golden_items` WHERE player_age BETWEEN 17 AND 21 AND (playerType ='PROFESSIONAL'AND status='FREE' OR playerType='SEMIPROFESSIONAL')
+    UNION ALL
+SELECT id, 4 rule, 'Quinta - Sexta' clubCategory FROM `ldp-data-servin.cdw_recos01_cons.golden_items`  WHERE player_age BETWEEN 17 AND 21 AND (playerType ='PROFESSIONAL'AND status='FREE' OR playerType='SEMIPROFESSIONAL' OR playerType='AMATEUR')
+    UNION ALL
+SELECT id, 5 rule, 'Universidades' clubCategory FROM `ldp-data-servin.cdw_recos01_cons.golden_items`  WHERE (playerType ='SEMIPROFESSIONAL'AND player_age <= 23) OR (playerType ='AMATEUR'AND player_age <= 23) OR (playerType ='JUNIOR'AND player_age BETWEEN 16 AND 21)
+"""
+
+
+
+DAG A AJUSTAR
+
+SELECT id, 1 rule, 'Primera' clubCategory 
+FROM `ldp-data-servin.cdw_recos01_cons.golden_items`  
+WHERE playerType IN ('PROFESSIONAL','JUNIOR')
+    UNION ALL
+SELECT id, 2 rule, 'Segunda' clubCategory 
+FROM `ldp-data-servin.cdw_recos01_cons.golden_items`  
+WHERE playerType IN ('PROFESSIONAL','SEMIPROFESSIONAL','JUNIOR')
+    UNION ALL
+SELECT id, 3 rule, 'Tercera' clubCategory 
+FROM `ldp-data-servin.cdw_recos01_cons.golden_items` 
+    UNION ALL
+SELECT id, 4 rule, 'Cuarta - Quinta - Sexta - Septima' clubCategory 
+FROM `ldp-data-servin.cdw_recos01_cons.golden_items`  
+WHERE playerType IN ('SEMIPROFESSIONAL','JUNIOR','AMATEUR')
+    UNION ALL
+SELECT id, 5 rule, 'Universidades - Academias' clubCategory 
+FROM `ldp-data-servin.cdw_recos01_cons.golden_items`  
+WHERE playerType ='JUNIOR'
+  UNION ALL
+SELECT id, 6 rule, 'Nulo' clubCategory 
+FROM `ldp-data-servin.cdw_recos01_cons.golden_items`  
+
+#################################################################### AJUSTES VIEWS DE BQ  ####################################################################
+
+-------------------------------------------------------------------- ranking_items_position --------------------------------------------------------------
+
+SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY position ORDER BY rating DESC) AS finish_rank  FROM (SELECT targetUserId, b.position, sum((cast(conversation as numeric) + cast(messages as numeric) + cast(share as numeric) + cast(follow as numeric) + cast(favourites as numeric) + cast(likes as numeric) + cast(visits as numeric))) AS rating,
+ FROM `ldp-data-servin.cdw_recos01_stru.rating`  a LEFT JOIN  ldp-data-servin.cdw_recos01_stru.items b ON a.targetUserId = b.id
+ WHERE DATE(a._PARTITIONTIME) >= CAST(CONCAT(CAST(EXTRACT(YEAR FROM CURRENT_DATE()) AS STRING),"-",CAST(format("%02d", EXTRACT(MONTH FROM CURRENT_DATE())) AS STRING),"-01") AS DATE) group by 1,2)) WHERE finish_rank <= 10
+ 
+ nuevo:
+ 
+ SELECT * 
+FROM 
+  (SELECT *, ROW_NUMBER() OVER (PARTITION BY position ORDER BY rating DESC) AS finish_rank  
+  FROM (SELECT targetUserId, b.position, 
+    sum(
+  (cast(sent_message as numeric) 
+  + cast(both_send_message as numeric) 
+  + cast(long_messages as numeric) 
+  + cast(share as numeric) 
+  + cast(follow as numeric) 
+  + cast(favourites as numeric) 
+  + cast(likes as numeric) 
+  + cast(visits as numeric)
+  + cast(vinc_request as numeric))) AS rating,
+  FROM `ldp-data-servin.cdw_recos01_stru.rating`  a LEFT JOIN  ldp-data-servin.cdw_recos01_stru.items b ON a.targetUserId = b.id
+  WHERE DATE(a._PARTITIONTIME) >= CAST(CONCAT(CAST(EXTRACT(YEAR FROM CURRENT_DATE()) AS STRING),"-",CAST(format("%02d", EXTRACT(MONTH FROM CURRENT_DATE())) AS STRING),"-01") AS DATE) group by 1,2)) WHERE finish_rank <= 10
+ 
+
+-------------------------------------------------------------------- rules_users ----------------------------------------------------------------------------
+
+
+SELECT * FROM (SELECT 
+* ,
+CASE
+    WHEN (clubCategory = 'Primera' AND companyType = 'CLUB') THEN 1
+    WHEN (clubCategory = 'Segunda' AND companyType = 'CLUB') THEN 2
+    WHEN (clubCategory IN ('Tercera', 'Cuarta') AND companyType = 'CLUB') THEN 3
+    WHEN (clubCategory IN ('Quinta', 'Sexta')  AND companyType IN ('CLUB', 'ACADEMY')) THEN 4
+    WHEN (companyType IN ('UNIVERSITY')) THEN 5
+    ELSE NULL
+END rule,
+ROW_NUMBER() OVER(PARTITION BY id ORDER BY TIMESTAMP(SUBSTR(updatedAt, 0, LENGTH(updatedAt)-6)) DESC) AS rownumber
+FROM `ldp-data-servin.cdw_recos01_stru.users` WHERE DATE(_PARTITIONTIME) >= CAST(CONCAT(CAST(EXTRACT(YEAR FROM CURRENT_DATE()) AS STRING),"-",CAST(format("%02d", EXTRACT(MONTH FROM CURRENT_DATE())) AS STRING),"-01") AS DATE)) a 
+WHERE rule IS NOT NULL and rownumber = 1
+
+AJUSTADO
+
+SELECT * FROM (SELECT 
+* ,
+CASE
+    WHEN clubCategory = 'Primera' THEN 1
+    WHEN clubCategory = 'Segunda' THEN 2
+    WHEN clubCategory = 'Tercera'  THEN 3
+    WHEN clubCategory IN ('Cuarta','Quinta','Sexta','Septima') THEN 4
+    WHEN companyType IN ('ACADEMY','UNIVERSITY') THEN 5
+    ELSE 6
+END rule,
+ROW_NUMBER() OVER(PARTITION BY id ORDER BY TIMESTAMP(SUBSTR(updatedAt, 0, LENGTH(updatedAt)-6)) DESC) AS rownumber
+FROM `ldp-data-servin.cdw_recos01_stru.users` WHERE DATE(_PARTITIONTIME) >= CAST(CONCAT(CAST(EXTRACT(YEAR FROM CURRENT_DATE()) AS STRING),"-",CAST(format("%02d", EXTRACT(MONTH FROM CURRENT_DATE())) AS STRING),"-01") AS DATE)) a 
+WHERE rule IS NOT NULL and rownumber = 1
+
+
+
+AJUSTADO STRING A NUMERO
+
+SELECT * FROM (SELECT 
+* ,
+CASE
+    WHEN clubCategory = 1 THEN 1
+    WHEN clubCategory = 2 THEN 2
+    WHEN clubCategory = 3  THEN 3
+    WHEN clubCategory > 3 THEN 4
+    WHEN companyType IN ('ACADEMY','UNIVERSITY') THEN 5
+    ELSE 6
+END rule,
+ROW_NUMBER() OVER(PARTITION BY id ORDER BY TIMESTAMP(SUBSTR(updatedAt, 0, LENGTH(updatedAt)-6)) DESC) AS rownumber
+FROM `ldp-data-servin.cdw_recos01_stru.users` WHERE DATE(_PARTITIONTIME) >= CAST(CONCAT(CAST(EXTRACT(YEAR FROM CURRENT_DATE()) AS STRING),"-",CAST(format("%02d", EXTRACT(MONTH FROM CURRENT_DATE())) AS STRING),"-01") AS DATE)) a 
+WHERE rule IS NOT NULL and rownumber = 1
+
+
+-------------------------------------------------------------------- recommended_user ----------------------------------------------------------------------------
+
+---------------- parece que el que no esta recomendado por matrix le recomienda popular por rating , seo tenemos q ajustar -----
+
+
+ANTES:
+
+WITH items_users AS (
+    SELECT  id, firstname, lastname, position, gender, country, leg, status, playerType, rules,
+    ARRAY(
+        SELECT DISTINCT CAST(userId AS STRING) FROM `ldp-data-servin.cdw_recos01_stru.recommended_items` WHERE es_producto_nuevo IS TRUE AND targetUserId = a.id
+    ) users
+    FROM `ldp-data-servin.cdw_recos01_cons.golden_items` AS a
+), recommended AS (
+SELECT *, ARRAY_LENGTH(items_recos) total_recos FROM
+(SELECT *,
+    ARRAY( 
+        SELECT 
+        STRUCT(id, firstname, lastname, position, gender, country, leg, status, playerType) item
+        FROM items_users
+        WHERE a.rule IN UNNEST(rules.rule) AND a.id IN UNNEST(users)
+    ) AS items_recos,
+FROM `ldp-data-servin.cdw_recos01_cons.rules_users` AS a)
+WHERE ARRAY_LENGTH(items_recos) > 0
+ )
+
+
+SELECT * FROM recommended
+UNION ALL
+SELECT *, ARRAY_LENGTH(items_recos) total_recos FROM
+(SELECT *,
+    ARRAY(
+        SELECT 
+    STRUCT(a.targetUserId AS id, b.firstname, b.lastname, b.position, b.gender, b.country, b.leg, b.status, b.playerType)
+    FROM(SELECT targetUserId, sum((cast(conversation as numeric) + cast(messages as numeric) + cast(share as numeric) + cast(follow as numeric) + cast(favourites as numeric) + cast(likes as numeric) + cast(visits as numeric))) AS rating
+    FROM `ldp-data-servin.cdw_recos01_stru.rating` 
+    WHERE DATE(_PARTITIONTIME) >= CAST(CONCAT(CAST(EXTRACT(YEAR FROM CURRENT_DATE()) AS STRING),"-",CAST(format("%02d", EXTRACT(MONTH FROM CURRENT_DATE())) AS STRING),"-01") AS DATE) group by 1 ORDER BY 2 DESC) a LEFT JOIN `ldp-data-servin.cdw_recos01_cons.golden_items` b ON a.targetUserId = b.id 
+        WHERE c.rule IN UNNEST(rules.rule)
+    )  AS items_recos,
+FROM `ldp-data-servin.cdw_recos01_cons.rules_users` AS c WHERE id NOT IN (SELECT id FROM recommended) )
+
+
+
+ajustar:
+
+WITH items_users AS (
+    SELECT  id, firstname, lastname, position, gender, country, leg, status, playerType, rules,
+    ARRAY(
+        SELECT DISTINCT CAST(userId AS STRING) FROM `ldp-data-servin.cdw_recos01_stru.recommended_items` WHERE es_producto_nuevo IS TRUE AND targetUserId = a.id
+    ) users
+    FROM `ldp-data-servin.cdw_recos01_cons.golden_items` AS a
+), recommended AS (
+SELECT *, ARRAY_LENGTH(items_recos) total_recos FROM
+(SELECT *,
+    ARRAY( 
+        SELECT 
+        STRUCT(id, firstname, lastname, position, gender, country, leg, status, playerType) item
+        FROM items_users
+        WHERE a.rule IN UNNEST(rules.rule) AND a.id IN UNNEST(users)
+    ) AS items_recos,
+FROM `ldp-data-servin.cdw_recos01_cons.rules_users` AS a)
+WHERE ARRAY_LENGTH(items_recos) > 0
+ )
+
+
+SELECT * FROM recommended
+UNION ALL
+SELECT *, ARRAY_LENGTH(items_recos) total_recos FROM
+(SELECT *,
+    ARRAY(
+        SELECT 
+    STRUCT(a.targetUserId AS id, b.firstname, b.lastname, b.position, b.gender, b.country, b.leg, b.status, b.playerType)
+    FROM(SELECT targetUserId, sum(
+  (cast(sent_message as numeric) 
+  + cast(both_send_message as numeric) 
+  + cast(long_messages as numeric) 
+  + cast(share as numeric) 
+  + cast(follow as numeric) 
+  + cast(favourites as numeric) 
+  + cast(likes as numeric) 
+  + cast(visits as numeric)
+  + cast(vinc_request as numeric))) AS rating
+    FROM `ldp-data-servin.cdw_recos01_stru.rating` 
+    WHERE DATE(_PARTITIONTIME) >= CAST(CONCAT(CAST(EXTRACT(YEAR FROM CURRENT_DATE()) AS STRING),"-",CAST(format("%02d", EXTRACT(MONTH FROM CURRENT_DATE())) AS STRING),"-01") AS DATE) 
+    group by 1 
+    ORDER BY 2 DESC) a LEFT JOIN `ldp-data-servin.cdw_recos01_cons.golden_items` b ON a.targetUserId = b.id 
+        WHERE c.rule IN UNNEST(rules.rule)
+    )  AS items_recos,
+FROM `ldp-data-servin.cdw_recos01_cons.rules_users` AS c WHERE id NOT IN (SELECT id FROM recommended) )
+
+
+
