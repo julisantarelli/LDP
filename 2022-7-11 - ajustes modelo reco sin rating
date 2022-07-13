@@ -69,10 +69,10 @@ AJUSTADO
 SELECT * FROM (SELECT 
 * ,
 CASE
-    WHEN clubCategory = 'Primera' THEN 1
-    WHEN clubCategory = 'Segunda' THEN 2
+    WHEN clubCategory IN ('Primera','First') THEN 1
+    WHEN clubCategory IN ('Segunda','Second') THEN 2
     WHEN clubCategory = 'Tercera'  THEN 3
-    WHEN clubCategory IN ('Cuarta','Quinta','Sexta','Septima') THEN 4
+    WHEN clubCategory IN ('Cuarta','Quinta','Sexta','Séptima') THEN 4
     WHEN companyType IN ('ACADEMY','UNIVERSITY') THEN 5
     ELSE 6
 END rule,
